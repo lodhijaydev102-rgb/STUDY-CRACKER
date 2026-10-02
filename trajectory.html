@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STUDY-CRACKER: Cannon Trajectory Simulator</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #0f172a; color: #f8fafc; text-align: center; margin: 0; padding: 15px; }
+        .container { max-width: 650px; margin: auto; background: #1e293b; padding: 20px; border-radius: 15px; box-shadow: 0px 10px 25px rgba(0,0,0,0.5); border: 2px solid #38bdf8; }
+        h1 { color: #38bdf8; margin: 0 0 5px 0; font-size: 28px; text-shadow: 0 0 10px rgba(56,189,248,0.3); }
+        h2 { color: #94a3b8; font-size: 14px; margin: 0 0 20px 0; letter-spacing: 1px; }
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #0f172a; padding: 15px; border-radius: 10px; margin-bottom: 15px; text-align: left; }
+        label { display: block; font-weight: bold; margin-bottom: 5px; color: #fbbf24; font-size: 14px; }
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: #38bdf8; }
+        .btn-fire { grid-column: span 2; background: #ef4444; color: white; border: none; padding: 12px; font-size: 16px; font-weight: bold; border-radius: 8px; cursor: pointer; transition: 0.2s; text-transform: uppercase; box-shadow: 0 4px 0 #b91c1c; }
+        .btn-fire:active { transform: translateY(4px); box-shadow: none; }
+        canvas { background: linear-gradient(to bottom, #020617, #1e1b4b); display: block; margin: 10px auto; border: 3px solid #475569; border-radius: 10px; width: 100%; max-width: 550px; height: auto; }
+        .stats { background: #0f172a; padding: 15px; border-radius: 10px; text-align: left; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 14px; border-left: 4px solid #fbbf24; }
+        .stats p { margin: 0; padding: 4px 0; }
+        .highlight { color: #38bdf8; font-weight: bold; }
+        .formula { grid-column: span 2; color: #a78bfa; font-style: italic; border-top: 1px solid #334155; padding-top: 8px; margin-top: 5px; font-size: 13px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>STUDY-CRACKER</h1>
+    <h2>3D तोप सिमुलेटर: इक्वेशन ऑफ़ ट्रेजेक्ट्री</h2>
+    
+    <canvas id="simCanvas" width="550" height="280"></canvas>
+
+    <div class="controls">
+        <div>
+            <label>गोले की रफ़्तार (u): <span id="vVal" class="highlight">25</span> m/s</label>
+            <input type="range" id="velocity" min="10" max="45" value="25" oninput="drawScene()">
+        </div>
+        <div>
+            <label>तोप का एंगल (θ): <span id="aVal" class="highlight">45</span>°</label>
+            <input type="range" id="angle" min="15" max="80" value="45" oninput="drawScene()">
+        </div>
+        <button class="btn-fire" onclick="fireCannon()">गोला दागो! (Fire 🚀)</button>
+    </div>
+
+    <div class="stats">
+        <p>कुल दूरी (Range): <span id="rangeRes" class="highlight">0</span> मी</p>
+        <p>अधिकतम ऊंचाई (Max Height): <span id="heightRes" class="highlight">0</span> मी</p>
+        <p>उड़ान का समय (Flight Time): <span id="timeRes" class="highlight">0</span> सेकेंड़</p>
+        <p>गुरुत्वाकर्षण (g): <span class="highlight">9.8 m/s²</span></p>
+        <div class="formula">
+            <strong>ट्रेजेक्ट्री समीकरण:</strong> y = x·tan(θ) - (g·x²) / (2·u²·cos²(θ))
+        </div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('simCanvas');
+const ctx = canvas.getContext('2d');
+
+let animationFrame;
+let ballX = 0, ballY = 0;
+let isFlying = false;
+let flightTime = 0;
+
+function drawScene() {
+    if (isFlying) return; // जब गोला उड़ रहा हो तब स्लाइडर लॉक रहेगा
+    
+    let u = parseFloat(document.getElementById('velocity').value);
+    let angleDeg = parseFloat(document.getElementById('angle').value);
+    
+    document.getElementById('vVal').innerText = u;
+    document.getElementById('aVal').innerText = angleDeg;
+    
+    let g = 9.8;
+    let theta = angleDeg * Math.PI / 180;
+    
+    // फ़िज़िक्स कैलकुलेशन
+    let range = (u * u * Math.sin(2 * theta)) / g;
+    let maxHeight = (u * u * Math.sin(theta) * Math.sin(theta)) / (2 * g);
+    let totalTime = (2 * u * Math.sin(theta)) / g;
+    
+    document.getElementById('rangeRes').innerText = range.toFixed(1);
+    document.getElementById('heightRes').innerText = maxHeight.toFixed(1);
+    document.getElementById('timeRes').innerText = totalTime.toFixed(1);
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // ज़मीन (Ground) बनाना
+    ctx.fillStyle = '#1e3a8a';
+    ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+    
+    // ग्रिड लाइन्स (पीछे के ग्राफ़िक्स)
+    ctx.strokeStyle = '#1e293b';
+    ctx.lineWidth = 1;
+    for(let i=0; i<canvas.width; i+=40) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, canvas.height-20); ctx.stroke();
+    }
+    
+    // रास्ता (Trajectory Path Template)
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(251, 191, 36, 0.4)';
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 2;
+    
+    let scaleX = (canvas.width - 80) / (range || 1);
+    let scaleY = (canvas.height - 60) / (maxHeight || 1);
+    let startX = 40;
+    let startY = canvas.height - 20;
+    
+    for (let xReal = 0; xReal <= range; xReal += 0.5) {
+        let yReal = xReal * Math.tan(theta) - (g * xReal * xReal) / (2 * u * u * Math.cos(theta) * Math.cos(theta));
+        ctx.lineTo(startX + xReal * scaleX, startY - yReal * scaleY);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]); // लाइन नॉर्मल करना
+    
+    // तोप (Cannon Custom Graphics) बनाना
+    ctx.save();
+    ctx.translate(startX, startY - 10);
+    ctx.rotate(-theta);
+    ctx.fillStyle = '#64748b';
+    ctx.fillRect(-5, -8, 35, 16); // तोप की नली
+    ctx.fillStyle = '#475569';
+    ctx.fillRect(25, -9, 4, 18); // तोप का मुहाना
+    ctx.restore();
+    
+    // तोप का पहिया (Wheel)
+    ctx.beginPath();
+    ctx.arc(startX, startY - 10, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#334155';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#94a3b8';
+    ctx.stroke();
+}
+
+function fireCannon() {
+    if (isFlying) return;
+    
+    isFlying = true;
+    flightTime = 0;
+    
+    let u = parseFloat(document.getElementById('velocity').value);
+    let angleDeg = parseFloat(document.getElementById('angle').value);
+    let g = 9.8;
+    let theta = angleDeg * Math.PI / 180;
+    
+    let range = (u * u * Math.sin(2 * theta)) / g;
+    let maxHeight = (u * u * Math.sin(theta) * Math.sin(theta)) / (2 * g);
+    let totalTime = (2 * u * Math.sin(theta)) / g;
+    
+    let scaleX = (canvas.width - 80) / (range || 1);
+    let scaleY = (canvas.height - 60) / (maxHeight || 1);
+    let startX = 40;
+    let startY = canvas.height - 20;
+    
+    function animate() {
+        flightTime += 0.05; // स्पीड कण्ट्रोल
+        
+        let t = flightTime;
+        // फ़िज़िक्स के नियम के अनुसार दूरी (x और y)
+        let xReal = u * t * Math.cos(theta);
+        let yReal = (u * t * Math.sin(theta)) - (0.5 * g * t * t);
+        
+        if (t > totalTime || xReal > range || yReal < 0) {
+            isFlying = false;
+            cancelAnimationFrame(animationFrame);
+            drawScene(); // रिसेट सीन
+            return;
+        }
+        
+        drawScene(); // पुराना सीन ड्रा करें
+        
+        // उड़ता हुआ गोला (Flying Cannonball)
+        ctx.beginPath();
+        ctx.arc(startX + xReal * scaleX, startY - yReal * scaleY, 7, 0, Math.PI * 2);
+        ctx.fillStyle = '#ef4444'; // चमकदार लाल गोला
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.stroke();
+        
+        animationFrame = requestAnimationFrame(animate);
+    }
+    
+    animate();
+}
+
+// पहली बार रन करने के लिए
+drawScene();
+</script>
+
+</body>
+</html>
